@@ -61,14 +61,17 @@ class SaleOrder(models.Model):
     def _check_stock_availability(self):
         """Return a list of dicts for lines with insufficient on-hand stock.
 
-        Skips service/consumable products (only storable products with
-        ``type == 'product'`` carry inventory).
+        Skips non-storable products. In Odoo 17+ storable goods have
+        ``is_storable = True``; consumables and services do not.
         Returns an empty list when all lines are OK.
         """
         self.ensure_one()
         insufficient = []
         for line in self.order_line:
-            if line.product_id.type != 'product':
+            # Odoo 17+: storable goods have type='consu' with is_storable=True.
+            # Consumables (untracked) also have type='consu' but is_storable=False.
+            # Only storable products carry tracked inventory — skip everything else.
+            if not line.product_id.is_storable:
                 continue
             available = line.product_id.with_context(
                 warehouse=self.warehouse_id.id
