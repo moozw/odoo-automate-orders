@@ -99,7 +99,8 @@ orders_auto_confirm/
 │   ├── res_company.py          ← auto_confirm_sale + auto_confirm_purchase fields
 │   ├── res_config_settings.py  ← related fields for Settings UI
 │   ├── sale_order.py           ← action_confirm override
-│   └── purchase_order.py       ← button_confirm override
+│   ├── purchase_order.py       ← button_confirm override
+│   └── stock_picking.py        ← _auto_force_validate shared helper
 ├── wizards/
 │   ├── __init__.py
 │   └── stock_warning_wizard.py ← insufficient stock popup
@@ -125,4 +126,4 @@ orders_auto_confirm/
 
 ## License
 
-LGPL-3 — see [GNU Lesser General Public License v3](https://www.gnu.org/licenses/lgpl-3.0.html).
+AGPL-3 — see [GNU Affero General Public License v3](https://www.gnu.org/licenses/agpl-3.0.html).
