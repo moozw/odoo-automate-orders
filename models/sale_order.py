@@ -1,6 +1,6 @@
 import logging
 
-from odoo import _, api, fields, models
+from odoo import _, fields, models
 from odoo.tools import float_compare
 
 _logger = logging.getLogger(__name__)
@@ -61,13 +61,16 @@ class SaleOrder(models.Model):
     def _check_stock_availability(self):
         """Return a list of dicts for lines with insufficient on-hand stock.
 
-        Skips service/consumable products (only checks ``type == 'product'``
-        i.e. storable products).  Returns an empty list when all lines are OK.
+        Skips non-storable products (services, consumables). Only storable
+        products (``is_storable = True``) carry inventory.
+        Returns an empty list when all lines are OK.
         """
         self.ensure_one()
         insufficient = []
         for line in self.order_line:
-            if line.product_id.type != 'product':
+            # In Odoo 17+ storable products have type='consu' with is_storable=True.
+            # Services have type='service' and carry no inventory.
+            if not line.product_id.is_storable:
                 continue
             available = line.product_id.with_context(
                 warehouse=self.warehouse_id.id
