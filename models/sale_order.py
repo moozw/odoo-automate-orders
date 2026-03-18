@@ -8,6 +8,7 @@ _logger = logging.getLogger(__name__)
 
 class SaleOrder(models.Model):
     _inherit = ['sale.order']  # list form — forward-compatible with Odoo 19
+    _description = 'Sale Order'
 
     def action_confirm(self):
         """Override to auto-validate delivery and post invoice when the
@@ -67,15 +68,22 @@ class SaleOrder(models.Model):
         """
         self.ensure_one()
         insufficient = []
-        for line in self.order_line:
-            # Odoo 17+: storable goods have type='consu' with is_storable=True.
-            # Consumables (untracked) also have type='consu' but is_storable=False.
-            # Only storable products carry tracked inventory — skip everything else.
-            if not line.product_id.is_storable:
-                continue
-            available = line.product_id.with_context(
-                warehouse=self.warehouse_id.id
-            ).free_qty
+        # Odoo 17+: storable goods have type='consu' with is_storable=True.
+        # Consumables (untracked) also have type='consu' but is_storable=False.
+        # Only storable products carry tracked inventory — skip everything else.
+        storable_lines = self.order_line.filtered(lambda l: l.product_id.is_storable)
+        if not storable_lines:
+            return insufficient
+
+        # Batch-fetch free_qty for all storable products in one context switch.
+        # Calling with_context() on the full recordset (rather than per-line) lets
+        # Odoo prefetch the underlying stock.quant queries in a single round-trip.
+        products = storable_lines.product_id.with_context(warehouse=self.warehouse_id.id)
+        products.read(['free_qty'])  # force batch computation
+        free_qty_map = {p.id: p.free_qty for p in products}
+
+        for line in storable_lines:
+            available = free_qty_map[line.product_id.id]
             required = line.product_uom_qty
             if float_compare(available, required, precision_rounding=line.product_uom.rounding) < 0:
                 insufficient.append({
@@ -100,28 +108,11 @@ class SaleOrder(models.Model):
         for picking in pickings:
             if picking.state == 'draft':
                 picking.action_confirm()
-            picking.action_assign()
-
-            # Pre-fill done quantities so button_validate does not open the
-            # Immediate Transfer wizard (which would return a dict and leave
-            # the picking unvalidated or force _action_done with 0 qty).
-            # Mirrors the pattern used in _validate_receipts() in purchase_order.py.
-            for move in picking.move_ids.filtered(
-                lambda m: m.state not in ('done', 'cancel')
-            ):
-                move.quantity = move.product_uom_qty
-
-            # skip_backorder avoids the "Create Backorder?" popup.
-            result = picking.with_context(skip_backorder=True).button_validate()
-            if isinstance(result, dict):
-                # Shouldn't happen after a passing stock check, but log it.
-                _logger.warning(
-                    'orders_auto_confirm: picking %s returned an action from '
-                    'button_validate (state=%s). Forcing _action_done.',
-                    picking.name, picking.state,
-                )
-                if picking.state not in ('done', 'cancel'):
-                    picking._action_done()
+            # action_assign only needed for outgoing pickings in confirmed state;
+            # already-assigned pickings skip this safely.
+            if picking.state == 'confirmed':
+                picking.action_assign()
+            picking._auto_force_validate()
 
     def _create_and_post_invoices(self):
         """Create an invoice for this order, set today's date, and post it."""
@@ -132,5 +123,7 @@ class SaleOrder(models.Model):
                 'orders_auto_confirm: no invoice created for order %s', self.name
             )
             return
+        # WARNING: do not add fields to this write() dict without re-evaluating
+        # check_move_validity=False — that context key bypasses balance validation.
         invoices.with_context(check_move_validity=False).write({'invoice_date': fields.Date.today()})
         invoices.action_post()

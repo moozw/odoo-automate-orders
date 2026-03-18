@@ -1,12 +1,14 @@
 import logging
 
 from odoo import fields, models
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
 
 class PurchaseOrder(models.Model):
     _inherit = ['purchase.order']  # list form — forward-compatible with Odoo 19
+    _description = 'Purchase Order'
 
     def button_confirm(self):
         """Override to auto-validate the receipt and post a vendor bill when
@@ -31,7 +33,7 @@ class PurchaseOrder(models.Model):
             order._validate_receipts()
             try:
                 order._create_and_post_bills()
-            except Exception:
+            except (UserError, ValidationError):
                 _logger.exception(
                     'orders_auto_confirm: bill creation failed for PO %s — '
                     'receipt was validated; create the bill manually.',
@@ -59,24 +61,9 @@ class PurchaseOrder(models.Model):
         for picking in receipts:
             if picking.state == 'draft':
                 picking.action_confirm()
-
-            # Pre-fill done quantities so button_validate does not open the
-            # Immediate Transfer wizard.
-            # Odoo 17+ renamed quantity_done → quantity on stock.move.
-            for move in picking.move_ids.filtered(
-                lambda m: m.state not in ('done', 'cancel')
-            ):
-                move.quantity = move.product_uom_qty
-
-            result = picking.with_context(skip_backorder=True).button_validate()
-            if isinstance(result, dict):
-                _logger.warning(
-                    'orders_auto_confirm: receipt %s returned an action from '
-                    'button_validate (state=%s). Forcing _action_done.',
-                    picking.name, picking.state,
-                )
-                if picking.state not in ('done', 'cancel'):
-                    picking._action_done()
+            # No action_assign needed for incoming receipts — Odoo does not
+            # reserve stock for incoming pickings.
+            picking._auto_force_validate()
 
     def _create_and_post_bills(self):
         """Create a vendor bill for this PO, set today as the bill date, post it.
@@ -111,6 +98,8 @@ class PurchaseOrder(models.Model):
 
         # Write invoice_date bypassing intermediate balance validation.
         # This is the key fix for the failure seen with automated actions.
+        # WARNING: do not add fields to this write() dict without re-evaluating
+        # check_move_validity=False — that context key bypasses balance validation.
         new_bills.with_context(check_move_validity=False).write({
             'invoice_date': fields.Date.today(),
         })

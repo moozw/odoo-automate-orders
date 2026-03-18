@@ -3,6 +3,7 @@ from odoo import fields, models
 
 class ResConfigSettings(models.TransientModel):
     _inherit = ['res.config.settings']
+    _description = 'Settings'
 
     auto_confirm_sale = fields.Boolean(
         related='company_id.auto_confirm_sale',

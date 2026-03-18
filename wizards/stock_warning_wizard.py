@@ -14,6 +14,7 @@ class SaleStockWarningWizard(models.TransientModel):
         comodel_name='sale.order',
         string='Sale Order',
         readonly=True,
+        ondelete='cascade',
     )
     warning_lines = fields.Text(
         string='Insufficient Stock Details',
