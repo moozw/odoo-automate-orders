@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="orders_stock_warning_wizard_view_form" model="ir.ui.view">
+        <field name="name">orders.stock.warning.wizard.form</field>
+        <field name="model">orders.stock.warning.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Insufficient Stock">
+                <sheet>
+                    <group>
+                        <field name="sale_order_id" readonly="1"/>
+                    </group>
+                    <group string="The following products have insufficient on-hand stock:">
+                        <field name="warning_lines"
+                               widget="text"
+                               readonly="1"
+                               nolabel="1"
+                               style="font-family: monospace; white-space: pre;"/>
+                    </group>
+                    <p class="text-muted">
+                        Please replenish stock or adjust order quantities, then try confirming again.
+                    </p>
+                </sheet>
+                <footer>
+                    <button name="action_close"
+                            string="Close"
+                            type="object"
+                            class="btn-primary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

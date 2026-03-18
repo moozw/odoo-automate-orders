@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Sales settings ─────────────────────────────────────────────── -->
+    <record id="res_config_settings_view_form_auto_confirm_sale"
+            model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.auto_confirm.sale</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <block name="invoicing_setting_container" position="after">
+                <block title="Order Automation" name="auto_confirm_sale_container">
+                    <setting id="auto_confirm_sale"
+                             help="When confirming a sale order, automatically validate the delivery and create &amp; post the invoice (blocked if stock is insufficient).">
+                        <field name="auto_confirm_sale"/>
+                    </setting>
+                </block>
+            </block>
+        </field>
+    </record>
+
+    <!-- ── Purchase settings ──────────────────────────────────────────── -->
+    <record id="res_config_settings_view_form_auto_confirm_purchase"
+            model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.auto_confirm.purchase</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="purchase.res_config_settings_view_form_purchase"/>
+        <field name="arch" type="xml">
+            <block name="invoicing_settings_container" position="after">
+                <block title="Order Automation" name="auto_confirm_purchase_container">
+                    <setting id="auto_confirm_purchase"
+                             help="When confirming a purchase order (RFQ), automatically validate the receipt and create &amp; post the vendor bill dated today.">
+                        <field name="auto_confirm_purchase"/>
+                    </setting>
+                </block>
+            </block>
+        </field>
+    </record>
+
+</odoo>
