@@ -105,13 +105,18 @@ class SaleOrder(models.Model):
         pickings = self.picking_ids.filtered(
             lambda p: p.state not in ('done', 'cancel')
         )
+        if not pickings:
+            return
+        # Batch action_confirm and action_assign to avoid N+1 per-picking calls.
+        draft = pickings.filtered(lambda p: p.state == 'draft')
+        if draft:
+            draft.action_confirm()
+        confirmed = pickings.filtered(lambda p: p.state == 'confirmed')
+        if confirmed:
+            confirmed.action_assign()
+        # _auto_force_validate must remain per-record (button_validate
+        # returns per-record wizard actions).
         for picking in pickings:
-            if picking.state == 'draft':
-                picking.action_confirm()
-            # action_assign only needed for outgoing pickings in confirmed state;
-            # already-assigned pickings skip this safely.
-            if picking.state == 'confirmed':
-                picking.action_assign()
             picking._auto_force_validate()
 
     def _create_and_post_invoices(self):

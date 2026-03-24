@@ -55,14 +55,18 @@ class PurchaseOrder(models.Model):
         wizard fires and blocks automation.
         """
         self.ensure_one()
-        receipts = self.picking_ids.filtered(
+        pickings = self.picking_ids.filtered(
             lambda p: p.state not in ('done', 'cancel')
         )
-        for picking in receipts:
-            if picking.state == 'draft':
-                picking.action_confirm()
-            # No action_assign needed for incoming receipts — Odoo does not
-            # reserve stock for incoming pickings.
+        if not pickings:
+            return
+        # Batch action_confirm to avoid N+1 per-picking calls.
+        draft = pickings.filtered(lambda p: p.state == 'draft')
+        if draft:
+            draft.action_confirm()
+        # No action_assign needed for incoming receipts — Odoo does not
+        # reserve stock for incoming pickings.
+        for picking in pickings:
             picking._auto_force_validate()
 
     def _create_and_post_bills(self):
