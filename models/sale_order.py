@@ -75,6 +75,18 @@ class SaleOrder(models.Model):
         if not storable_lines:
             return insufficient
 
+        required_by_product = {}
+        product_by_id = {}
+        for line in storable_lines:
+            product = line.product_id
+            product_by_id[product.id] = product
+            required_by_product[product.id] = required_by_product.get(product.id, 0.0) + (
+                line.product_uom._compute_quantity(
+                    line.product_uom_qty,
+                    product.uom_id,
+                )
+            )
+
         # Batch-fetch free_qty for all storable products in one context switch.
         # Calling with_context() on the full recordset (rather than per-line) lets
         # Odoo prefetch the underlying stock.quant queries in a single round-trip.
@@ -82,12 +94,12 @@ class SaleOrder(models.Model):
         products.read(['free_qty'])  # force batch computation
         free_qty_map = {p.id: p.free_qty for p in products}
 
-        for line in storable_lines:
-            available = free_qty_map[line.product_id.id]
-            required = line.product_uom_qty
-            if float_compare(available, required, precision_rounding=line.product_uom.rounding) < 0:
+        for product_id, required in required_by_product.items():
+            product = product_by_id[product_id]
+            available = free_qty_map[product_id]
+            if float_compare(available, required, precision_rounding=product.uom_id.rounding) < 0:
                 insufficient.append({
-                    'product': line.product_id.display_name,
+                    'product': product.display_name,
                     'required': required,
                     'available': available,
                 })
