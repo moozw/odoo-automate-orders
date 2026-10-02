@@ -1,39 +1,39 @@
 Orders Auto Confirm
 ===================
 
-Automates the post-confirmation workflow for sale and purchase orders.
+Takes the clicking out of a straightforward order: confirm it and the delivery
+or receipt is validated and the invoice or bill posted, in one action.
 
-**Sale orders**
+A counter sale that is paid for and taken away has no state worth tracking. The
+goods leave, the invoice is raised, and making a user walk a quotation through
+confirm, then reserve, then validate, then create invoice, then post is five
+clicks of ceremony for a transaction that was over before it was entered.
 
-When *Auto-confirm delivery & invoice* is enabled in Sales settings, confirming
-a single sale order will:
+This collapses that into confirming the order — but only when the stock is
+actually there, which is the point. An order that cannot be fulfilled is
+blocked rather than confirmed and left half-processed.
 
-1. Check on-hand stock for all storable products on the order.
-2. If any product has insufficient stock, block confirmation and show a popup
-   listing the shortfalls — the order remains in draft.
-3. If stock is sufficient, confirm the order, immediately validate all outgoing
-   deliveries (skipping the backorder wizard), and create and post a customer
-   invoice dated today.
+**Sale orders.** Confirming checks stock for every storable product, summing
+demand per product and converting it into the product's own unit of measure, so
+two lines of six for the same item are weighed against stock as twelve and a
+line priced per dozen is weighed as twelve units. If anything is short,
+confirmation is blocked and the shortfall shown. Otherwise the order is
+confirmed, the delivery validated in full with no backorder, and the invoice
+posted.
 
-Bulk confirmation (multiple orders selected) uses standard Odoo behaviour with
-no automation, so draft pickings are created normally.
+**Purchase orders.** Confirming validates the receipt and posts the vendor bill.
+There is no stock check — a receipt brings goods in.
 
-**Purchase orders**
+**What it changes in your database**
 
-When *Auto-confirm receipt & bill* is enabled in Purchase settings, confirming
-a purchase order (RFQ) will:
+This module exists to take several deliberate actions on one click.
 
-1. Confirm the order via the standard Odoo flow (creates the incoming receipt).
-2. Pre-fill done quantities on all receipt moves and validate the receipt
-   immediately (no Immediate Transfer wizard).
-3. Create and post a vendor bill dated today.
-
-If bill creation fails (e.g. account configuration issue), the receipt is still
-validated and an error is logged — the bill can be created manually from the PO.
-
-**Configuration**
-
-Enable the features per-company under:
-
-- **Sales → Configuration → Settings → Order Automation**
-- **Purchase → Configuration → Settings → Order Automation**
+* **It validates stock movements** at full quantity with no backorder wizard,
+  writing stock moves and valuation.
+* **It posts accounting documents**, which is final in Odoo.
+* **It blocks sale order confirmation on insufficient stock** — a behaviour
+  change for anyone used to confirming an order and sorting the stock out later.
+* **Both options default to off**, so the module does nothing until a company
+  enables it. That is the safe way to install it on a live database.
+* It adds two settings to ``res.company`` and a warning wizard, and works per
+  company rather than per user, order or warehouse.

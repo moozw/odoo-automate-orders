@@ -1,129 +1,88 @@
-# Orders Auto Confirm — Odoo 18 Module
+# Orders Auto Confirm
 
-Automatically validates deliveries/receipts and posts invoices/bills when sale
-or purchase orders are confirmed — controlled by company-level toggles in Settings.
+Takes the clicking out of a straightforward order: confirm it and the delivery
+or receipt is validated and the invoice or bill posted, in one action.
 
----
+A counter sale that is paid for and taken away has no state worth tracking. The
+goods leave, the invoice is raised, and making a user walk a quotation through
+confirm, then reserve, then validate, then create invoice, then post is five
+clicks of ceremony for a transaction that was over before it was entered.
 
-## Features
+This collapses that into confirming the order — but only when the stock is
+actually there, which is the point. An order that cannot be fulfilled is
+blocked rather than confirmed and left half-processed.
 
-### Sale Orders
-- On confirmation, checks **on-hand stock** for all storable products
-- If any item is insufficient → **blocking popup wizard** (order stays draft, no bypass)
-- If stock is OK → delivery auto-validated, invoice created with **today's date** and posted
+## What it does
 
-### Purchase Orders (RFQs)
-- On confirmation → receipt auto-validated (all ordered quantities marked as received)
-- Vendor bill created with **today's date** and posted immediately
+### On a sale order
 
-### Settings
-Both features are toggled independently per company:
-- **Sales → Configuration → Settings → Order Automation**
-- **Purchase → Configuration → Settings → Order Automation**
+With the option enabled, confirming a sale order:
 
----
+1. **Checks stock** for every storable product on it. Demand is summed per
+   product and converted into the product's own unit of measure, so two lines
+   of six for the same item are weighed against stock as twelve, and a line
+   priced per dozen is weighed as twelve units.
+2. **Blocks confirmation** if anything is short, showing what is missing, what
+   was needed and what is available. Nothing is confirmed, delivered or
+   invoiced.
+3. Otherwise **confirms, validates the delivery** at full quantity with no
+   backorder, and **posts the invoice**.
 
-## Requirements
+### On a purchase order
 
-| Dependency | Purpose |
-|------------|---------|
-| `sale_management` | Sale order model |
-| `purchase` | Purchase order model |
-| `stock` | Picking / receipt validation |
-| `account` | Invoice and vendor bill posting |
+With the purchase option enabled, confirming a purchase order validates the
+receipt and posts the vendor bill. There is no stock check — a receipt brings
+goods in.
 
-- Odoo **18.0** (Community or Enterprise)
-- Python 3.10+
+## What it changes in your database
 
----
+Read this before installing on a live system. This module exists to take
+several deliberate actions on one click.
 
-## Installation
-
-1. Copy the `orders_auto_confirm` folder into your Odoo custom addons directory
-2. Restart the Odoo server
-3. Go to **Settings → Activate Developer Mode**
-4. Go to **Apps → Update Apps List**
-5. Search **Orders Auto Confirm** → **Install**
-
----
+* **It validates stock movements.** Deliveries and receipts are validated at
+  full quantity with no backorder wizard. Stock moves and valuation are
+  written.
+* **It posts accounting documents.** Invoices and vendor bills are posted, which
+  is final in Odoo.
+* **It blocks sale order confirmation on insufficient stock.** This is a
+  behaviour change for anyone used to confirming an order and sorting the stock
+  out later. With the option off, nothing is blocked.
+* **Both options default to off.** The module does nothing until a company
+  enables it, which is the safe way to install it on a live database.
+* **It adds two settings** to `res.company`, surfaced in Sales and Purchase
+  settings, and a warning wizard.
+* **It is per company**, not per user, per order or per warehouse.
 
 ## Configuration
 
-After installation:
+| Where | Setting | Effect |
+|---|---|---|
+| Sales → Configuration → Settings | Auto-confirm delivery & invoice | Validate the delivery and post the invoice when a sale order is confirmed |
+| Purchase → Configuration → Settings | Auto-confirm receipt & bill | Validate the receipt and post the bill when a purchase order is confirmed |
 
-1. Go to **Sales → Configuration → Settings**
-   - Under **Order Automation**, enable **Auto-confirm delivery & invoice on sale confirmation**
+Both are off by default.
 
-2. Go to **Purchase → Configuration → Settings**
-   - Under **Order Automation**, enable **Auto-confirm receipt & bill on purchase order confirmation**
+## Requirements
 
-3. Save settings
+Odoo 18. Depends on `sale_management`, `purchase`, `stock` and `account`. No
+external Python packages.
 
----
+## Scope and limitations
 
-## How It Works
+* **All or nothing per company.** There is no way to automate counter sales
+  while leaving project orders alone, beyond turning the setting off.
+* The stock check covers storable products. Services and untracked consumables
+  are not checked, since they have no tracked inventory.
+* Stock is checked at confirmation. An order confirmed when stock was available
+  is not re-checked later.
+* Deliveries are validated in full with no backorder. A part-shipment workflow
+  is not compatible with this.
+* Invoices are posted without review. Anything needing approval before posting
+  should not be run through it.
+* If a transfer cannot be validated automatically — because another module
+  demands a wizard, for instance — that is logged and the transfer is left for
+  a person.
 
-### Sale order flow
-```
-action_confirm()
-  ├── company.auto_confirm_sale == False → super() only (standard Odoo)
-  └── True →
-        ├── _check_stock_availability()
-        │     ├── all OK → proceed
-        │     └── any insufficient → return blocking wizard (order stays draft)
-        ├── super().action_confirm()       ← creates delivery picking
-        ├── _confirm_pickings()            ← assign + validate delivery
-        └── _create_and_post_invoices()    ← invoice dated today, posted
-```
+## Licence
 
-### Purchase order flow
-```
-button_confirm()
-  ├── company.auto_confirm_purchase == False → super() only
-  └── True →
-        ├── super().button_confirm()       ← creates receipt picking
-        ├── _validate_receipts()           ← set qty = demand, validate receipt
-        └── _create_and_post_bills()       ← vendor bill dated today, posted
-```
-
----
-
-## File Structure
-
-```
-orders_auto_confirm/
-├── __init__.py
-├── __manifest__.py
-├── models/
-│   ├── __init__.py
-│   ├── res_company.py          ← auto_confirm_sale + auto_confirm_purchase fields
-│   ├── res_config_settings.py  ← related fields for Settings UI
-│   ├── sale_order.py           ← action_confirm override
-│   ├── purchase_order.py       ← button_confirm override
-│   └── stock_picking.py        ← _auto_force_validate shared helper
-├── wizards/
-│   ├── __init__.py
-│   └── stock_warning_wizard.py ← insufficient stock popup
-├── views/
-│   ├── res_config_settings_views.xml
-│   └── stock_warning_wizard.xml
-└── security/
-    └── ir.model.access.csv
-```
-
----
-
-## Notes
-
-- **Backorders** — receipt/delivery validation uses `skip_backorder=True`
-- **Stock check** — uses `free_qty` (on-hand minus existing reservations), not forecasted quantity. Services and consumables are skipped.
-- **Single-step routes only** — the module validates the first picking created for an order. Warehouses configured for multi-step routes (e.g. 2-step delivery: pick + ship, or 3-step receipt: input → quality → stock) will only have the first step auto-validated; remaining steps must be completed manually.
-- **Bill creation failure** — if posting the vendor bill fails after a receipt is validated, the error is logged and the receipt remains validated. Create the bill manually from the PO; check Odoo logs for the cause.
-- **Multi-company** — each company has its own toggle; the active company at confirmation time is used.
-- **Single order only** — the module is designed to operate on one sales order at a time. Confirming multiple orders via list-view multi-select reverts to standard Odoo behaviour: deliveries are created in draft and invoices are not posted automatically.
-
----
-
-## License
-
-AGPL-3 — see [GNU Affero General Public License v3](https://www.gnu.org/licenses/agpl-3.0.html).
+AGPL-3.
