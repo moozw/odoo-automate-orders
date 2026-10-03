@@ -1,6 +1,6 @@
 import logging
 
-from odoo import fields, models
+from odoo import _, fields, models
 from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
@@ -32,13 +32,28 @@ class PurchaseOrder(models.Model):
         for order in self:
             order._validate_receipts()
             try:
-                order._create_and_post_bills()
-            except (UserError, ValidationError):
+                # The savepoint is what makes "continue anyway" safe. Bill
+                # creation and posting are several writes; without it, a bill
+                # that was created and then failed to post left a half-made
+                # draft committed alongside the validated receipt, with only a
+                # server log to say so. Rolling back to the savepoint leaves
+                # the goods received and no bill at all, which is a state
+                # somebody can act on.
+                with self.env.cr.savepoint():
+                    order._create_and_post_bills()
+            except (UserError, ValidationError) as exc:
                 _logger.exception(
                     'orders_auto_confirm: bill creation failed for PO %s — '
                     'receipt was validated; create the bill manually.',
                     order.name,
                 )
+                # A log line is invisible to the person who pressed Confirm.
+                order.message_post(body=_(
+                    "The receipt was validated, but the vendor bill could not "
+                    "be created automatically:\n\n%(error)s\n\nNo partial "
+                    "bill has been left behind. Create the bill from this "
+                    "order when the problem is resolved."
+                ) % {'error': exc})
 
         return result
 

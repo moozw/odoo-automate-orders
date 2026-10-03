@@ -1,6 +1,6 @@
 {
     'name': 'Orders Auto Confirm',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.1.0',
     'category': 'Sales',
     'summary': 'Auto-validate delivery/receipt and post invoice/bill on order confirmation',
     'license': 'AGPL-3',
